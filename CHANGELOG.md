@@ -6,6 +6,24 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+- **Video file size: 3.6 GB → ~1.7 GB** (visually identical, SSIM ≥ 0.987).
+  `scripts/fetch-video.sh` now runs a two-pass transcode: a fast
+  VideoToolbox intermediate to drop the watermark, then a slow x265
+  CRF24 pass that compresses ~38% tighter than VideoToolbox at the same
+  visual quality. HDR10 metadata (BT.2020 + PQ + MaxCLL=1000 / MaxFALL=300
+  + master-display primaries) is now explicitly preserved through the
+  x265 params instead of relying on ffmpeg auto-propagation.
+- New `AQUARIUM_QUICK=1` env flag on `fetch-video.sh` skips the slow x265
+  pass for ~10-minute installs at 3.6 GB output — useful for CI / testing.
+
+### Methodology
+The compression target came out of a real benchmark: a 60-second slice
+encoded four ways (VideoToolbox q60, VideoToolbox 8 Mbps, x265 slow
+CRF22, x265 slow CRF24) measured for size + encode time + SSIM against
+the source. CRF24 won the quality-per-byte race; CRF22 was slightly
+higher quality but 30% larger. Numbers in commit message below.
+
 ## [1.0.0] — 2026-05-22
 
 The first public release. Built by Anthony Harwelik in a single evening after

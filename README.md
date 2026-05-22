@@ -50,9 +50,17 @@ If you've been looking for the same thing, this is for you.
 ```bash
 git clone https://github.com/aharwelik/aquarium-screensaver.git
 cd aquarium-screensaver
-./install.sh                 # ~10 min, mostly the video transcode
+./install.sh                 # ~3.5 hr, mostly the visually-lossless x265 pass
 aquarium                     # start the show (default 15 min)
 ```
+
+> [!TIP]
+> **In a hurry?** Set `AQUARIUM_QUICK=1` before the install — skips the slow
+> x265 pass and ships you the larger VideoToolbox intermediate (~3.6 GB
+> instead of ~1.7 GB, ~10 minutes instead of ~3.5 hours).
+> ```bash
+> AQUARIUM_QUICK=1 ./install.sh
+> ```
 
 Or grab the [**zip download**](https://github.com/aharwelik/aquarium-screensaver/archive/refs/heads/main.zip) and run `./install.sh` from the unpacked folder.
 
@@ -106,7 +114,7 @@ Or grab the [**zip download**](https://github.com/aharwelik/aquarium-screensaver
 | ------------------------ | ---------------------------------------------------- |
 | CPU                      | Apple Silicon — M1, M2, M3, M4 family                |
 | RAM                      | 8 GB recommended                                     |
-| Storage                  | ~5 GB free (≈24 GB temporarily during transcode)     |
+| Storage                  | ~2 GB free (final video ≈1.7 GB; ≈24 GB transient during the one-time install transcode) |
 | macOS                    | 13 Ventura or newer (tested through Tahoe 26)        |
 | Xcode CLT (`swiftc`)     | any current version — the installer offers to fetch  |
 | Homebrew                 | for `ffmpeg`, `yt-dlp`, `aria2` (auto-installed)     |
