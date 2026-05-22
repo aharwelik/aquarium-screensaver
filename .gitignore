@@ -1,0 +1,15 @@
+# Compiled artifact — install.sh regenerates this on every machine
+/bin/aquarium-bin
+
+# Local working files
+*.mkv
+*.mp4
+*.webm
+*.part
+*.aria2
+.DS_Store
+
+# Editor noise
+.vscode/
+.idea/
+*.swp
