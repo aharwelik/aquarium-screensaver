@@ -1,0 +1,43 @@
+name: build
+
+# Validates that the Swift binary compiles cleanly on every PR + push.
+# Doesn't run the binary (would need a GUI) — just verifies the source.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Aquarium.swift'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: swiftc -O on macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          sw_vers
+
+      - name: Compile (optimized)
+        run: |
+          swiftc -O Aquarium.swift -o aquarium-bin
+
+      - name: Verify binary
+        run: |
+          file aquarium-bin
+          ls -lh aquarium-bin
+          ./aquarium-bin --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aquarium-bin
+          path: aquarium-bin
+          retention-days: 14
