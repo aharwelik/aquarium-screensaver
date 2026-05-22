@@ -195,15 +195,25 @@ final class DismissOnAnyInputView: NSView {
         window?.acceptsMouseMovedEvents = true
     }
 
-    override func keyDown(with event: NSEvent)            { onAnyInput() }
-    override func mouseDown(with event: NSEvent)          { onAnyInput() }
-    override func rightMouseDown(with event: NSEvent)     { onAnyInput() }
-    override func otherMouseDown(with event: NSEvent)     { onAnyInput() }
-    override func mouseMoved(with event: NSEvent)         { onAnyInput() }
-    override func mouseDragged(with event: NSEvent)       { onAnyInput() }
-    override func rightMouseDragged(with event: NSEvent)  { onAnyInput() }
-    override func otherMouseDragged(with event: NSEvent)  { onAnyInput() }
-    override func scrollWheel(with event: NSEvent)        { onAnyInput() }
+    /// Same grace period the controller's event monitors use.  Without this
+    /// the view's own input overrides would also catch the synthetic activation
+    /// events and quit before the user saw anything.
+    var readyForInputAt: Date = .distantFuture
+
+    private func handle() {
+        guard Date() > readyForInputAt else { return }
+        onAnyInput()
+    }
+
+    override func keyDown(with event: NSEvent)            { handle() }
+    override func mouseDown(with event: NSEvent)          { handle() }
+    override func rightMouseDown(with event: NSEvent)     { handle() }
+    override func otherMouseDown(with event: NSEvent)     { handle() }
+    override func mouseMoved(with event: NSEvent)         { handle() }
+    override func mouseDragged(with event: NSEvent)       { handle() }
+    override func rightMouseDragged(with event: NSEvent)  { handle() }
+    override func otherMouseDragged(with event: NSEvent)  { handle() }
+    override func scrollWheel(with event: NSEvent)        { handle() }
 }
 
 // =============================================================================
@@ -227,6 +237,20 @@ final class AquariumController {
     /// Effective duration for the current run (overridable from CLI / defaults).
     private let durationSeconds: TimeInterval
 
+    /// Startup grace period (seconds).  Any input events during this window
+    /// are ignored — necessary because `NSApp.activate` and the window
+    /// creation cascade synthesize a couple of mouse-moved / focus events at
+    /// launch which would otherwise trigger an instant terminate.  Anthony
+    /// learned this the hard way: the binary "ran" for 80ms.  Five seconds
+    /// is enough for AVPlayer's hardware decoder to finish warming up, for
+    /// every monitor's window to settle at its final z-order, and for the
+    /// terminal-launching scenario (where the user's cursor was already on
+    /// the Sceptre and would otherwise immediately dismiss).
+    private static let inputGracePeriod: TimeInterval = 5.0
+
+    /// Date past which input is honored.  Set during `start()`.
+    private var readyForInputAt: Date = .distantFuture
+
     init(durationSeconds: TimeInterval) {
         self.durationSeconds = durationSeconds
     }
@@ -235,6 +259,9 @@ final class AquariumController {
     /// global+local input monitors, and either start the 15-min timer (if the
     /// screen is unlocked) or wait for an unlock notification.
     func start() {
+        // Set the grace deadline BEFORE we install monitors so the first
+        // events the system synthesizes during activation are ignored.
+        readyForInputAt = Date().addingTimeInterval(AquariumController.inputGracePeriod)
         installInputMonitors()
         buildWindows()
         // Force the app forward so our windows reliably take focus across
@@ -286,12 +313,20 @@ final class AquariumController {
         }
 
         for (i, screen) in NSScreen.screens.enumerated() where !disabled.contains(i) {
-            // Window: borderless, screen-saver-level, fills the entire NSScreen
-            // frame including any notch area for native displays.
+            // Window: borderless, max-level, fills the entire NSScreen frame
+            // including any notch area for native displays.
             let frame = screen.frame
             let w = AquariumWindow(contentRect: frame, styleMask: .borderless,
                                    backing: .buffered, defer: false, screen: screen)
-            w.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
+            // Level: highest CGWindow level macOS exposes (`.maximumWindow`).
+            // The ordinary `.screenSaverWindow` level (1000) was getting
+            // demoted by the Window Server when our app's window overlapped
+            // an actively-used display — confirmed via CGWindowListCopyWindowInfo
+            // where the Sceptre window showed `kCGWindowIsOnscreen=false`
+            // despite being at level 1000.  `.maximumWindow` (2147483630)
+            // sits above every documented level and the Server stops
+            // suppressing it.
+            w.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.maximumWindow)))
             w.backgroundColor = .black
             w.isOpaque = true
             w.hasShadow = false
@@ -300,11 +335,13 @@ final class AquariumController {
             w.isMovable = false
             w.setFrame(frame, display: true)
 
-            // Content view: quits the app on ANY input event.
+            // Content view: quits the app on ANY input event AFTER the
+            // startup grace period elapses.
             let view = DismissOnAnyInputView(frame: w.contentRect(forFrameRect: frame))
             view.wantsLayer = true
             view.layer?.backgroundColor = NSColor.black.cgColor
             view.onAnyInput = { NSApp.terminate(nil) }
+            view.readyForInputAt = readyForInputAt
 
             // Player.  `automaticallyWaitsToMinimizeStalling = false` avoids
             // AVFoundation hesitating to keep its buffer happy — we already
@@ -330,10 +367,34 @@ final class AquariumController {
 
             w.contentView = view
             w.makeKeyAndOrderFront(nil)
+            // `orderFrontRegardless` is the screensaver-style escape hatch —
+            // ordinary makeKeyAndOrderFront won't force the Sceptre's window
+            // forward when Safari (or any other app with a popup menu open)
+            // is holding focus on that display.  Anthony hit this when his
+            // mouse hovered over a Safari context menu at launch and the
+            // main-display window came up below it (technically "on=false"
+            // in CGWindowList terms — the Window Server skipped the paint).
+            w.orderFrontRegardless()
             w.makeFirstResponder(view)
 
             windows.append(w)
             players.append(player)
+        }
+
+        // Post-creation re-order pass.  The Window Server sometimes drops the
+        // "on screen" flag for the window that overlaps the currently-active
+        // app's display.  Calling orderFrontRegardless again after every
+        // window exists in the list — and after a short delay so AppKit's
+        // own activation cascade has settled — reliably forces every screen
+        // to paint.  Anthony's main display (Sceptre) was the consistent
+        // victim of this until we added the second pass.
+        for delay in [0.05, 0.25, 1.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self else { return }
+                for w in self.windows {
+                    w.orderFrontRegardless()
+                }
+            }
         }
     }
 
@@ -349,11 +410,18 @@ final class AquariumController {
                                            .otherMouseDown, .mouseMoved,
                                            .leftMouseDragged, .rightMouseDragged,
                                            .otherMouseDragged, .scrollWheel]
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { _ in
-            NSApp.terminate(nil); return nil
+        // Same handler logic for both monitors: honor the startup grace
+        // period.  Local monitor returns the event so AppKit can still route
+        // it (we don't care; we're terminating anyway).
+        let shouldDismiss = { [weak self] in
+            (self?.readyForInputAt ?? .distantFuture) < Date()
+        }
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { event in
+            if shouldDismiss() { NSApp.terminate(nil) }
+            return event
         }
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { _ in
-            NSApp.terminate(nil)
+            if shouldDismiss() { NSApp.terminate(nil) }
         }
     }
 
