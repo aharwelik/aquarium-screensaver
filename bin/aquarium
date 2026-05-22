@@ -1,0 +1,90 @@
+#!/usr/bin/env zsh
+# ----------------------------------------------------------------------------
+#  aquarium — CLI wrapper for the AquariumScreensaver Swift binary.
+#  Author: Anthony Harwelik <aharwelik@gmail.com>
+#  License: MIT
+#
+#  Subcommands here are the thin / scripty side of the surface; the Swift
+#  binary itself handles --duration, --settings, --version, --help.  The
+#  reason this wrapper exists is so things like `aquarium status` and
+#  `aquarium reset-defaults` don't have to spin up an AppKit run loop.
+# ----------------------------------------------------------------------------
+
+set -e
+BIN_DIR="${0:A:h}"
+SWIFT_BIN="${BIN_DIR}/aquarium-bin"
+DEFAULTS_DOMAIN="com.harwelik.aquarium"
+
+usage() {
+  cat <<EOF
+aquarium — a real coral-reef screensaver for Apple Silicon Macs.
+            by Anthony Harwelik
+
+USAGE
+  aquarium                       start the show (default 15 minutes)
+  aquarium start                 same as above
+  aquarium start MIN             start with a custom duration in minutes
+  aquarium stop                  kill the running aquarium
+  aquarium status                show whether the aquarium is running
+  aquarium settings              open the preferences window
+  aquarium duration MIN          set default duration to MIN minutes (persists)
+  aquarium reset-defaults        factory-reset all settings
+  aquarium version               print version
+  aquarium help                  this text
+
+EXAMPLES
+  aquarium start 30              show me 30 minutes of fish, please
+  aquarium duration 5            change the default to 5-minute shows
+  aquarium settings              tweak audio, screens, stagger, etc.
+EOF
+}
+
+cmd="${1:-start}"; shift 2>/dev/null || true
+
+case "$cmd" in
+  start|"")
+    minutes="${1:-}"
+    if [[ -n "$minutes" ]]; then
+      exec "$SWIFT_BIN" --duration "$minutes"
+    fi
+    exec "$SWIFT_BIN"
+    ;;
+  stop)
+    if pkill -f "aquarium-bin" 2>/dev/null; then
+      echo "aquarium stopped"
+    else
+      echo "aquarium wasn't running"
+    fi
+    ;;
+  status)
+    if pgrep -f "aquarium-bin" >/dev/null; then
+      echo "running (pid $(pgrep -f aquarium-bin | head -1))"
+    else
+      echo "stopped"
+    fi
+    ;;
+  settings|preferences|prefs)
+    exec "$SWIFT_BIN" --settings
+    ;;
+  duration)
+    minutes="${1:-}"
+    [[ -z "$minutes" ]] && { echo "usage: aquarium duration MIN" >&2; exit 1; }
+    defaults write "$DEFAULTS_DOMAIN" durationSeconds -float $(( minutes * 60 ))
+    echo "default duration set to $minutes min"
+    ;;
+  reset-defaults|reset)
+    defaults delete "$DEFAULTS_DOMAIN" 2>/dev/null && echo "defaults cleared" || echo "no defaults to clear"
+    ;;
+  version|--version|-v)
+    exec "$SWIFT_BIN" --version
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  *)
+    echo "unknown subcommand: $cmd" >&2
+    echo
+    usage
+    exit 1
+    ;;
+esac
