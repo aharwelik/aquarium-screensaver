@@ -7,7 +7,7 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Changed
-- **Video file size: 3.6 GB → ~1.7 GB** (visually identical, SSIM ≥ 0.987).
+- **Video file size: 3.6 GB → 1.5 GB** (58% reduction, visually identical, SSIM 0.986 / Y 0.982 / U 0.992 / V 0.994 between source and compressed).
   `scripts/fetch-video.sh` now runs a two-pass transcode: a fast
   VideoToolbox intermediate to drop the watermark, then a slow x265
   CRF24 pass that compresses ~38% tighter than VideoToolbox at the same
