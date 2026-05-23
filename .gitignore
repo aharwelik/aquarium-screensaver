@@ -1,5 +1,6 @@
 # Compiled artifact — install.sh regenerates this on every machine
 /bin/aquarium-bin
+saver/build/
 
 # Local working files
 *.mkv
