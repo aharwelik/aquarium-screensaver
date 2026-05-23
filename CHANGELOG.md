@@ -6,6 +6,18 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- **Autostart**: `aquarium autostart on` now installs a per-user LaunchAgent
+  (`com.harwelik.aquarium.autostart`) that polls `HIDIdleTime` from
+  `IOHIDSystem` every 60 seconds. When idle ≥ `autostartThresholdSeconds`
+  (default 3600) and Aquarium isn't already running, it launches the binary.
+  Anthony walks away → fish tank appears; Anthony comes back → the binary's
+  own global NSEvent monitor dismisses it.
+- `aquarium threshold MIN` — adjust the idle threshold.
+- `aquarium disable-mac-aerial` — opens System Settings → Wallpaper so you
+  can flip Tahoe's "Show as Screensaver" off (the only way to stop
+  `WallpaperAerialsExtension` from competing with Aquarium for the screen).
+
 ### Changed
 - **Video file size: 3.6 GB → 1.5 GB** (58% reduction, visually identical, SSIM 0.986 / Y 0.982 / U 0.992 / V 0.994 between source and compressed).
   `scripts/fetch-video.sh` now runs a two-pass transcode: a fast

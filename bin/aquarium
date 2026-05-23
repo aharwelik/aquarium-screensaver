@@ -15,6 +15,12 @@ BIN_DIR="${0:A:h}"
 SWIFT_BIN="${BIN_DIR}/aquarium-bin"
 DEFAULTS_DOMAIN="com.harwelik.aquarium"
 
+REPO_ROOT="${BIN_DIR:h}"
+AGENT_LABEL="com.harwelik.aquarium.autostart"
+AGENT_PLIST="$HOME/Library/LaunchAgents/${AGENT_LABEL}.plist"
+SUPPORT_DIR="$HOME/Library/Application Support/Aquarium"
+WATCHDOG_INSTALLED="$SUPPORT_DIR/watchdog.sh"
+
 usage() {
   cat <<EOF
 aquarium — a real coral-reef screensaver for Apple Silicon Macs.
@@ -27,15 +33,24 @@ USAGE
   aquarium stop                  kill the running aquarium
   aquarium status                show whether the aquarium is running
   aquarium settings              open the preferences window
-  aquarium duration MIN          set default duration to MIN minutes (persists)
+  aquarium duration MIN          set default show length (persists)
   aquarium reset-defaults        factory-reset all settings
+
+  aquarium autostart on          enable: launch fish tank after idle threshold
+  aquarium autostart off         disable autostart
+  aquarium autostart status      show whether autostart is on
+  aquarium threshold MIN         minutes-of-idle before autostart fires (default 60)
+
+  aquarium disable-mac-aerial    open System Settings → Wallpaper so you can
+                                 turn off macOS's built-in Aerial screensaver
+
   aquarium version               print version
   aquarium help                  this text
 
 EXAMPLES
   aquarium start 30              show me 30 minutes of fish, please
-  aquarium duration 5            change the default to 5-minute shows
-  aquarium settings              tweak audio, screens, stagger, etc.
+  aquarium autostart on          run automatically when I walk away
+  aquarium threshold 30          ...after 30 minutes instead of 60
 EOF
 }
 
@@ -74,6 +89,59 @@ case "$cmd" in
     ;;
   reset-defaults|reset)
     defaults delete "$DEFAULTS_DOMAIN" 2>/dev/null && echo "defaults cleared" || echo "no defaults to clear"
+    ;;
+  autostart)
+    subcmd="${1:-status}"; shift 2>/dev/null || true
+    case "$subcmd" in
+      on|enable|start)
+        mkdir -p "$SUPPORT_DIR" "$HOME/Library/LaunchAgents"
+        # Install the watchdog where the LaunchAgent expects it.
+        cp "$REPO_ROOT/scripts/watchdog.sh" "$WATCHDOG_INSTALLED"
+        chmod +x "$WATCHDOG_INSTALLED"
+        # Materialize the plist with __HOME__ substituted (LaunchAgent
+        # plists don't expand $HOME, so we sub at install time).
+        sed "s|__HOME__|$HOME|g" "$REPO_ROOT/scripts/autostart.plist.tmpl" > "$AGENT_PLIST"
+        # bootout (silent if not loaded), then bootstrap fresh.
+        UID_NUM=$(id -u)
+        launchctl bootout "gui/$UID_NUM/$AGENT_LABEL" 2>/dev/null || true
+        launchctl bootstrap "gui/$UID_NUM" "$AGENT_PLIST"
+        THRESH=$(defaults read "$DEFAULTS_DOMAIN" autostartThresholdSeconds 2>/dev/null || echo 3600)
+        echo "autostart enabled — fish tank appears after $((THRESH / 60)) min of no input."
+        echo "change with:  aquarium threshold MIN"
+        ;;
+      off|disable|stop)
+        UID_NUM=$(id -u)
+        launchctl bootout "gui/$UID_NUM/$AGENT_LABEL" 2>/dev/null || true
+        rm -f "$AGENT_PLIST" "$WATCHDOG_INSTALLED"
+        echo "autostart disabled"
+        ;;
+      status|"")
+        UID_NUM=$(id -u)
+        if launchctl print "gui/$UID_NUM/$AGENT_LABEL" >/dev/null 2>&1; then
+          THRESH=$(defaults read "$DEFAULTS_DOMAIN" autostartThresholdSeconds 2>/dev/null || echo 3600)
+          echo "on — threshold $((THRESH / 60)) min"
+        else
+          echo "off"
+        fi
+        ;;
+      *)
+        echo "usage: aquarium autostart {on|off|status}" >&2; exit 1
+        ;;
+    esac
+    ;;
+  threshold)
+    minutes="${1:-}"
+    [[ -z "$minutes" ]] && { echo "usage: aquarium threshold MIN" >&2; exit 1; }
+    defaults write "$DEFAULTS_DOMAIN" autostartThresholdSeconds -int $(( minutes * 60 ))
+    echo "autostart threshold = $minutes min"
+    ;;
+  disable-mac-aerial|mac-aerial)
+    echo "Opening System Settings → Wallpaper."
+    echo "In the right pane, turn OFF the 'Show as Screensaver' toggle so"
+    echo "the macOS Aerials stop interfering with Aquarium."
+    open "x-apple.systempreferences:com.apple.WallpaperPrefPane" 2>/dev/null || \
+      open "/System/Library/PreferencePanes/DesktopScreenEffectsPref.prefPane" 2>/dev/null || \
+      true
     ;;
   version|--version|-v)
     exec "$SWIFT_BIN" --version

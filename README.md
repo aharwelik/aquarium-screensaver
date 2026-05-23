@@ -149,11 +149,51 @@ aquarium start 30               start with a custom duration in minutes
 aquarium stop                   kill the running aquarium
 aquarium status                 is it running?
 aquarium settings               open the preferences window
-aquarium duration 5             change the default to 5-minute shows
+aquarium duration 5             change the default show length
+
+aquarium autostart on           run automatically when you walk away
+aquarium autostart off          disable autostart
+aquarium autostart status       is autostart enabled?
+aquarium threshold 60           minutes of idle before autostart fires (default 60)
+
+aquarium disable-mac-aerial     open System Settings → Wallpaper so you can
+                                turn off macOS's built-in Aerial screensaver
+
 aquarium reset-defaults         factory-reset all settings
 aquarium version                print version
 aquarium help                   show usage
 ```
+
+### Autostart (Aquarium as your screensaver)
+
+```bash
+aquarium autostart on            # default: 60 minutes of inactivity
+aquarium threshold 30            # change the trigger to 30 minutes
+aquarium disable-mac-aerial      # turn off macOS's competing aerial
+```
+
+What this does:
+
+- Installs a per-user `LaunchAgent`
+  (`~/Library/LaunchAgents/com.harwelik.aquarium.autostart.plist`) that
+  polls every 60 seconds.
+- The agent runs `~/Library/Application Support/Aquarium/watchdog.sh`,
+  which reads the system-wide `HIDIdleTime` from `IOHIDSystem` — the
+  exact same counter the OS itself uses for screensaver / display sleep.
+- When `HIDIdleTime ≥ threshold` and Aquarium isn't already running,
+  the watchdog launches `aquarium-bin`. The binary's own global NSEvent
+  monitor handles dismissal as soon as you touch anything.
+- Threshold lives in `defaults read com.harwelik.aquarium autostartThresholdSeconds`
+  — change it any time and the next watchdog tick picks it up.
+
+> [!IMPORTANT]
+> **macOS Tahoe ships an aerial screensaver of its own** that runs in a
+> separate wallpaper subsystem (`WallpaperAerialsExtension`). It doesn't
+> respect `caffeinate` or the legacy `idleTime` setting and will compete
+> with Aquarium for who paints first. **Run `aquarium disable-mac-aerial`**
+> to open System Settings → Wallpaper, then turn off the **"Show as
+> Screensaver"** toggle. That's the only path — there's no clean `defaults`
+> write for it on Tahoe.
 
 Settings live under the `com.harwelik.aquarium` `defaults` domain — you can
 inspect or tweak directly:

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent that fires watchdog.sh once a minute.  Installed by
+  `aquarium autostart on`.  The watchdog itself decides whether to actually
+  launch aquarium-bin based on HIDIdleTime + the configured threshold —
+  this plist just provides the heartbeat.
+
+  Author: Anthony Harwelik <aharwelik@gmail.com>
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.harwelik.aquarium.autostart</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/Library/Application Support/Aquarium/watchdog.sh</string>
+  </array>
+
+  <!-- Heartbeat every 60 seconds.  Idle resolution is plenty fine for
+       hour-scale thresholds. -->
+  <key>StartInterval</key>
+  <integer>60</integer>
+
+  <!-- Also run once at login so a fresh boot starts watching immediately
+       instead of waiting for the first tick. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Don't restart the watchdog itself if it crashes for whatever reason
+       (it's a one-shot script — LaunchAgent re-runs it next interval). -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <!-- Useful for debugging. -->
+  <key>StandardOutPath</key>
+  <string>/tmp/aquarium-autostart.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/aquarium-autostart.err</string>
+
+  <!-- Run only when the user is logged in (per-user agent). -->
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+</dict>
+</plist>
