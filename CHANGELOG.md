@@ -7,6 +7,17 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- **Native `.saver` bundle** (`saver/Aquarium.saver`).  Builds via
+  `./saver/build.sh install` and drops into `~/Library/Screen Savers/`.
+  Shows up in **System Settings → Wallpaper → Screen Saver** alongside
+  every other Mac screensaver.  ScreenSaverEngine handles activation,
+  multi-display, and dismissal-on-input natively — no LaunchAgent
+  watchdog needed.  `ScreenSaverView` subclass hosts an `AVPlayerLayer`
+  per display; video resolves from `Contents/Resources/aquarium.mp4`
+  (symlinked at build time to the standalone install location so we
+  don't duplicate 1.5 GB).  Audio is muted for the System Settings
+  preview pane.  Tested via `[NSBundle loadAndReturnError]` —
+  principal class `AquariumView` resolves cleanly.
 - **Autostart**: `aquarium autostart on` now installs a per-user LaunchAgent
   (`com.harwelik.aquarium.autostart`) that polls `HIDIdleTime` from
   `IOHIDSystem` every 60 seconds. When idle ≥ `autostartThresholdSeconds`

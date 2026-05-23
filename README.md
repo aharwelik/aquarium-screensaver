@@ -51,8 +51,14 @@ If you've been looking for the same thing, this is for you.
 git clone https://github.com/aharwelik/aquarium-screensaver.git
 cd aquarium-screensaver
 ./install.sh                 # ~3.5 hr, mostly the visually-lossless x265 pass
-aquarium                     # start the show (default 15 min)
+./saver/build.sh install     # build + install the .saver bundle (proper macOS screensaver)
+aquarium                     # or run it manually right now
 ```
+
+After running `saver/build.sh install`, **Aquarium shows up in System Settings →
+Wallpaper → Screen Saver** like any other Mac screensaver. Pick it there and
+macOS handles activation, multi-display, and dismissal-on-input natively —
+no LaunchAgent, no watchdog.
 
 > [!TIP]
 > **In a hurry?** Set `AQUARIUM_QUICK=1` before the install — skips the slow
