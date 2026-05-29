@@ -9,9 +9,11 @@
 #        AVFoundation + AVKit + Cocoa.
 #    2.  Assembles Aquarium.saver/ with Contents/MacOS/Aquarium and
 #        Contents/Info.plist.
-#    3.  Symlinks the canonical video at ~/Library/Application Support/Aquarium/
-#        into the bundle's Resources/ so System Settings → Screen Saver
-#        preview works without duplicating 1.5 GB on disk.
+#    3.  Embeds the canonical video from ~/Library/Application Support/Aquarium/
+#        into the bundle's Resources/ via APFS clone (cp -c).  It MUST be a
+#        real file, NOT a symlink: the sandboxed screensaver host on Sonoma/
+#        Tahoe cannot read a symlink that points outside the bundle (that bug
+#        renders the saver as a black screen).
 #    4.  If invoked with `install`, copies the bundle into
 #        ~/Library/Screen Savers/ and opens the Screen Saver pref pane.
 #
@@ -50,12 +52,19 @@ swiftc -O \
 print -P "%F{cyan}==>%f writing Info.plist"
 cp "$HERE/Info.plist" "$BUNDLE/Contents/Info.plist"
 
-print -P "%F{cyan}==>%f linking video into Resources/"
+print -P "%F{cyan}==>%f embedding video into Resources/"
+# IMPORTANT: copy (APFS clone) the real file into the bundle — do NOT symlink.
+# On macOS Sonoma/Tahoe the screensaver runs in a sandbox that cannot follow a
+# symlink out to ~/Library/Application Support, so a symlinked video renders as
+# a black screen.  `cp -c` clones via APFS (instant, block-shared, ~no extra
+# disk) while leaving a real, sandbox-readable file inside the bundle.
 if [[ -f "$VIDEO_PATH" ]]; then
-  ln -sf "$VIDEO_PATH" "$BUNDLE/Contents/Resources/aquarium.mp4"
+  rm -f "$BUNDLE/Contents/Resources/aquarium.mp4"
+  cp -c "$VIDEO_PATH" "$BUNDLE/Contents/Resources/aquarium.mp4" 2>/dev/null \
+    || cp "$VIDEO_PATH" "$BUNDLE/Contents/Resources/aquarium.mp4"
 else
   print -P "%F{yellow}!!%f video missing at $VIDEO_PATH — run ./install.sh first"
-  print -P "%F{yellow}!!%f Bundle will still build, but System Settings preview will be black."
+  print -P "%F{yellow}!!%f Bundle will still build, but it will be black until the video exists."
 fi
 
 # Sign ad-hoc so macOS gatekeeper doesn't refuse to load the bundle.
